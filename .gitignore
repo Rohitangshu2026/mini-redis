@@ -2,8 +2,8 @@
 .DS_Store
 
 # Binaries
-client
-server
+/client_app
+/server
 
 # macOS debug symbols
 *.dSYM/
