@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+
+# Binaries
+client
+server
+
+# macOS debug symbols
+*.dSYM/
+
+# Object files (future-proof)
+*.o
