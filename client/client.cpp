@@ -28,23 +28,34 @@ int main(){
         return 1;
     }
 
-    // send message
-    const char* msg = "PING";
-    ssize_t w = write(client_fd, msg, strlen(msg));
-    if(w < 0){
-        perror("Failed to send message!");
-        return 1;
+    std::cout << "Connected to server!\n";
+
+    while(true){
+        // read user input
+        std::string input;
+        std::getline(std::cin, input);
+
+        if(input == "exit")
+            break;
+
+        // send message
+        ssize_t w = write(client_fd, input.c_str(), input.size());
+        if(w < 0){
+            perror("Failed to send message!");
+            return 1;
+        }
+
+        // read response
+        char read_buffer[64] = {};
+        ssize_t n = read(client_fd, read_buffer,sizeof(read_buffer) - 1);
+        if(n <= 0){
+            std::cout << "Server connection closed!!";
+            break;
+        }
+        std::cout << "Server : " << read_buffer << std::endl;
     }
 
-    // read response
-    char read_buffer[64] = {};
-    ssize_t n = read(client_fd, read_buffer,sizeof(read_buffer) - 1);
-    if(n < 0){
-        perror("Failed to read response from server!");
-        return 1;
-    }
-    std::cout << "Server : " << read_buffer << std::endl;
+    
     close(client_fd);
-
     return 0;
 }
