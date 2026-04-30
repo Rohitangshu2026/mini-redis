@@ -10,3 +10,17 @@
 
 # Object files (future-proof)
 *.o
+
+# CMake build directory
+/build/
+
+# New CMake binaries
+/mini-redis-server
+/mini-redis-client
+
+# IDE files
+/.vscode/
+/.idea/
+/compile_commands.json
+
+/docs
