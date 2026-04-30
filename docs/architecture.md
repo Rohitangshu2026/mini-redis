@@ -711,15 +711,15 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Loop as EventLoop
+    participant EL as EventLoop
     participant Heap as TimerHeap
     participant DB as Database
     participant Client
 
-    Note over Loop: top of each iteration
-    Loop->>Heap: peek()
+    Note over EL: top of each iteration
+    EL->>Heap: peek()
     alt heap empty
-        Loop->>Loop: timeout = idle_timeout
+        EL->>EL: timeout = idle_timeout
     else top.deadline <= now
         loop up to ACTIVE_EXPIRE_MAX
             Heap->>DB: get entry via ref
@@ -727,9 +727,9 @@ sequenceDiagram
             DB->>Heap: pop
         end
     else top.deadline > now
-        Loop->>Loop: timeout = min(idle, top.deadline-now)
+        EL->>EL: timeout = min idle, top.deadline-now
     end
-    Loop->>Loop: poll(timeout)
+    EL->>EL: poll with timeout
 
     Note over Client,DB: lazy path
     Client->>DB: GET foo
@@ -990,12 +990,27 @@ erDiagram
         uint64 last_access_sec
         size_t heap_idx
     }
-    STRING { string value }
-    LIST_ITEM { string value }
-    HASH_FIELD { string field; string value }
-    SET_MEMBER { string member }
-    ZNODE { string name; double score }
-    HEAP_ITEM { uint64 deadline; size_t* ref }
+    STRING {
+        string value
+    }
+    LIST_ITEM {
+        string value
+    }
+    HASH_FIELD {
+        string field
+        string value
+    }
+    SET_MEMBER {
+        string member
+    }
+    ZNODE {
+        string name
+        double score
+    }
+    HEAP_ITEM {
+        uint64 deadline
+        pointer ref
+    }
 ```
 
 ---
