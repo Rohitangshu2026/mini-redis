@@ -24,17 +24,25 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ---- Include path ----
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
-# ---- Server binary ----
-add_executable(mini-redis-server
-    src/main.cpp
+# ---- Core library (shared by server, client, and tests) ----
+add_library(mini-redis-core STATIC
+    src/net/socket.cpp
+    src/net/io_helpers.cpp
+    src/protocol/wire.cpp
+    src/protocol/serialize.cpp
+    src/store/hashtable.cpp
+    src/server/command.cpp
     src/server/server.cpp
-    src/server/client_connection.cpp
 )
+target_include_directories(mini-redis-core PUBLIC ${CMAKE_SOURCE_DIR}/include)
+
+# ---- Server binary ----
+add_executable(mini-redis-server src/main.cpp)
+target_link_libraries(mini-redis-server PRIVATE mini-redis-core)
 
 # ---- Client binary ----
-add_executable(mini-redis-client
-    client/client.cpp
-)
+add_executable(mini-redis-client client/client.cpp)
+target_link_libraries(mini-redis-client PRIVATE mini-redis-core)
 
 # ---- Tests ----
 enable_testing()
