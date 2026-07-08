@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-// Response value type tags (Ch 11). Every reply is one serialized value:
+// Response value type tags. Every reply is one serialized value:
 //   nil : [u8 SER_NIL]
 //   err : [u8 SER_ERR][u32 code][u32 len][msg]
 //   str : [u8 SER_STR][u32 len][bytes]
@@ -35,3 +35,11 @@ void out_int(std::vector<uint8_t>& out, int64_t x);
 void out_dbl(std::vector<uint8_t>& out, double x);
 void out_err(std::vector<uint8_t>& out, int32_t code, const std::string& msg);
 void out_arr(std::vector<uint8_t>& out, uint32_t n);   // header only; append n values after
+
+// For arrays whose length is only known after iterating: write a placeholder
+// header, append the values, then patch the count into place.
+//   size_t ctx = out_begin_arr(out);
+//   ... out_str/out_dbl ... (count them)
+//   out_end_arr(out, ctx, n);
+size_t out_begin_arr(std::vector<uint8_t>& out);
+void   out_end_arr(std::vector<uint8_t>& out, size_t ctx, uint32_t n);

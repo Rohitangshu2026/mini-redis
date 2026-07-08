@@ -1,5 +1,6 @@
 #include "protocol/serialize.h"
 
+#include <cassert>
 #include <cstring>
 
 static void put_u8(std::vector<uint8_t>& out, uint8_t v) { out.push_back(v); }
@@ -38,4 +39,15 @@ void out_err(std::vector<uint8_t>& out, int32_t code, const std::string& msg) {
 void out_arr(std::vector<uint8_t>& out, uint32_t n) {
     put_u8(out, SER_ARR);
     put_u32(out, n);
+}
+
+size_t out_begin_arr(std::vector<uint8_t>& out) {
+    put_u8(out, SER_ARR);
+    put_u32(out, 0);            // placeholder, patched by out_end_arr
+    return out.size() - 4;
+}
+
+void out_end_arr(std::vector<uint8_t>& out, size_t ctx, uint32_t n) {
+    assert(out[ctx - 1] == SER_ARR);
+    std::memcpy(&out[ctx], &n, 4);
 }

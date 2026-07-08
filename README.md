@@ -2,7 +2,7 @@
 
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)
 ![build: CMake](https://img.shields.io/badge/build-CMake-informational)
-![tests: 30 passing](https://img.shields.io/badge/tests-30%20passing-brightgreen)
+![tests: 35 passing](https://img.shields.io/badge/tests-35%20passing-brightgreen)
 
 An in-memory key–value store written from scratch in C++17. It pairs a
 single-threaded, `poll()`-driven network server with a custom binary wire
@@ -55,7 +55,8 @@ $ ./build/mini-redis-client keys
 | Request encoding | `[u32 nstr] ([u32 len][bytes])*` |
 | Response encoding | Type-tagged value (nil / string / int / double / error / array) |
 | Keyspace | Custom intrusive hash table with incremental rehashing |
-| Commands | `GET`, `SET`, `DEL`, `KEYS` |
+| Sorted set | AVL tree + hash map; `O(log n)` range and rank queries |
+| Commands | Strings: `GET` `SET` `DEL` `KEYS` · Sorted sets: `ZADD` `ZREM` `ZSCORE` `ZQUERY` |
 | Pipelining | Yes — every complete request buffered from one read is served |
 | Tests | 25 unit tests (Catch2 + CTest) |
 | Build | CMake; server, client and tests share one static library |
@@ -83,7 +84,7 @@ flowchart LR
         POLL["poll() event loop"]
         CONNS["connection table<br/>per-conn read + write buffers"]
         WIRE["wire codec<br/>framing + parse_req"]
-        DISP["command dispatch<br/>GET SET DEL KEYS"]
+        DISP["command dispatch<br/>strings + sorted sets"]
         SER["response serializer<br/>type-tagged values"]
         STORE["keyspace<br/>hash table + incremental rehashing"]
 
@@ -156,7 +157,19 @@ ranges later) rely on.
   migrates a bounded number of buckets (128) from `older` to `newer`. Growth is
   therefore spread across many operations instead of one `O(n)` stop-the-world
   resize. Lookups consult **both** tables while a migration is in flight.
-- **`Entry`** — a key/value pair (both strings today) carrying the intrusive node.
+- **`Entry`** — a key and its typed value (string or sorted set), carrying the
+  intrusive node. Deleting an entry tears down whatever its value owns.
+
+### Data structures (`ds/`)
+- **AVL tree** — intrusive, self-balancing, with parent pointers. Every node
+  also maintains its **subtree size**, so `avl_offset` can jump an arbitrary
+  number of positions through the in-order sequence in `O(log n)` — an order
+  statistic tree, which is what makes rank queries cheap.
+- **Sorted set (`ZSet`)** — a collection of `(score, name)` pairs stored once
+  and indexed twice: a hash map by name (O(1) point lookups) and the AVL tree
+  by `(score, name)` tuple order (range scans). Each `ZNode` embeds both index
+  hooks plus the name bytes inline, in a single allocation. Score updates
+  detach and re-insert the tree node so ordering always holds.
 
 ### Server / event loop (`server/`)
 - **`Conn`** — one connection: its fd, intent flags (`want_read` / `want_write` /
@@ -167,8 +180,9 @@ ranges later) rely on.
   dispatches it, and appends the framed, serialized reply to `outgoing`.
   `handle_read` calls it in a loop, so several requests received in one read are
   processed back to back (**pipelining**).
-- **Command dispatch** — `do_request` upper-cases the verb and routes to
-  `GET` / `SET` / `DEL` / `KEYS`, writing a typed value into the response buffer.
+- **Command dispatch** — `do_request` upper-cases the verb, validates arity and
+  the key's value type (mismatches get a `WRONGTYPE` error), and routes to the
+  string or sorted-set handlers, writing a typed value into the response buffer.
 
 ### Client (`client/`)
 Sends a command either from `argv` (one-shot) or interactively, encodes it in the
@@ -341,8 +355,15 @@ value = tag , body        # tag/body per the serialization table above
 | `SET`  | `key value`   | nil |
 | `DEL`  | `key`         | integer (1 if removed, else 0) |
 | `KEYS` | —             | array of all keys |
+| `ZADD` | `key score name` | integer (1 = new pair, 0 = score updated) |
+| `ZREM` | `key name`    | integer (1 if removed, else 0) |
+| `ZSCORE` | `key name`  | double, or nil if absent |
+| `ZQUERY` | `key score name offset limit` | array of alternating name, score |
 
-Unknown verbs and malformed frames return a typed error.
+`ZQUERY` is a generic range query: seek to the first pair `>= (score, name)`
+in tuple order, walk `offset` positions by rank, then emit up to `limit`
+output elements. Unknown verbs and malformed frames return a typed error;
+commands against a key holding the wrong kind of value return `WRONGTYPE`.
 
 ---
 
@@ -374,10 +395,12 @@ Run the test suite:
 ctest --test-dir build --output-on-failure
 ```
 
-The 25 tests cover socket fd ownership and move semantics, the wire codec and
-framing, `parse_req` on malformed and truncated input, hash-table
-insert/lookup/delete including a one-million-key rehash-survival run, and the
-byte layout of the response serializer.
+The 35 tests cover socket fd ownership and move semantics, the wire codec and
+framing, `parse_req` on malformed and truncated input, the byte layout of the
+response serializer, and property tests that drive the hash table (a
+one-million-key rehash-survival run), the AVL tree (100k random ops with a
+full structural audit every 1k), and the sorted set (10k random ops against a
+two-index oracle).
 
 ---
 
@@ -387,7 +410,8 @@ byte layout of the response serializer.
 mini-redis/
 ├── CMakeLists.txt              # builds a shared mini-redis-core static lib
 ├── include/
-│   ├── common/                 # log helpers, container_of
+│   ├── common/                 # log helpers, container_of, string hash
+│   ├── ds/                     # AVL tree (order statistics), sorted set
 │   ├── net/                    # Socket, read_full/write_all
 │   ├── protocol/               # wire framing/parser, response serializer
 │   ├── server/                 # Conn, Server, command dispatch
@@ -419,11 +443,11 @@ mini-redis/
 ## Roadmap
 
 Implemented today: the networking stack, wire protocol, response serialization,
-the hash-table keyspace with incremental rehashing, and `GET`/`SET`/`DEL`/`KEYS`.
+the hash-table keyspace with incremental rehashing, and an AVL-backed sorted
+set with `O(log n)` range and rank queries, behind a typed command surface.
 
 Planned next:
 
-- Sorted set backed by a balanced BST for `O(log n)` ranked range queries
 - Additional value types (list, hash, set)
 - Per-key TTL with a timer, and approximate LRU eviction
 - Durability: append-only log and point-in-time snapshots

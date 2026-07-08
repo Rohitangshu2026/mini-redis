@@ -56,8 +56,8 @@ bool collect_node(HNode* node, void* arg) {
 
 Server::~Server() {
     std::vector<HNode*> all;
-    hm_foreach(&db_, collect_node, &all);                       // collect first...
-    for (HNode* n : all) delete container_of(n, Entry, node);   // ...then delete (no use-after-free)
+    hm_foreach(&db_, collect_node, &all);                          // collect first...
+    for (HNode* n : all) entry_del(container_of(n, Entry, node));  // ...then free (no use-after-free)
     hm_clear(&db_);
 }
 

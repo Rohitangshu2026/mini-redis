@@ -32,6 +32,7 @@ add_library(mini-redis-core STATIC
     src/protocol/serialize.cpp
     src/store/hashtable.cpp
     src/ds/avl.cpp
+    src/ds/zset.cpp
     src/server/command.cpp
     src/server/server.cpp
 )
