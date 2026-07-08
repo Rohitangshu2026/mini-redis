@@ -4,6 +4,7 @@
 #include "store/entry.h"
 #include "common/intrusive.h"
 #include "common/log.h"
+#include "common/clock.h"
 #include "protocol/wire.h"
 #include "protocol/serialize.h"
 
@@ -27,7 +28,10 @@ static void buf_consume(std::vector<uint8_t>& buf, size_t n) {
     buf.erase(buf.begin(), buf.begin() + n);
 }
 
-Server::Server(int port) : port_(port) {
+Server::Server(int port, uint64_t idle_timeout_ms)
+    : port_(port), idle_timeout_ms_(idle_timeout_ms) {
+    dlist_init(&idle_list_);
+
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) die("socket()");
 
@@ -77,6 +81,8 @@ void Server::accept_new() {
     auto conn = std::make_unique<Conn>();
     conn->fd        = connfd;
     conn->want_read = true;
+    conn->last_active_ms = get_monotonic_msec();
+    dlist_insert_before(&idle_list_, &conn->idle_node);   // newest at the back
     if ((size_t)connfd >= conns_.size()) conns_.resize(connfd + 1);
     conns_[connfd] = std::move(conn);
 }
@@ -128,6 +134,28 @@ void Server::handle_write(Conn& c) {
     if (c.outgoing.empty()) { c.want_read = true; c.want_write = false; }
 }
 
+// poll() timeout derived from the nearest timer: the front of the idle list.
+int32_t Server::next_timer_ms() {
+    if (dlist_empty(&idle_list_)) return -1;      // no timers, block until IO
+    uint64_t now_ms = get_monotonic_msec();
+    Conn* conn = container_of(idle_list_.next, Conn, idle_node);
+    uint64_t due_ms = conn->last_active_ms + idle_timeout_ms_;
+    if (due_ms <= now_ms) return 0;               // already overdue
+    return (int32_t)(due_ms - now_ms);
+}
+
+// The list is in last-active order, so expired connections are all at the
+// front; stop at the first one still alive.
+void Server::process_timers() {
+    uint64_t now_ms = get_monotonic_msec();
+    while (!dlist_empty(&idle_list_)) {
+        Conn* conn = container_of(idle_list_.next, Conn, idle_node);
+        if (conn->last_active_ms + idle_timeout_ms_ > now_ms) break;
+        fprintf(stderr, "idle timeout: closing fd %d\n", conn->fd);
+        conns_[conn->fd].reset();                 // ~Conn detaches + closes
+    }
+}
+
 void Server::run() {
     auto make_pfd = [](int fd, short events) {
         struct pollfd p; p.fd = fd; p.events = events; p.revents = 0; return p;
@@ -146,7 +174,7 @@ void Server::run() {
             poll_args.push_back(make_pfd(up->fd, ev));
         }
 
-        int rv = poll(poll_args.data(), (nfds_t)poll_args.size(), -1);
+        int rv = poll(poll_args.data(), (nfds_t)poll_args.size(), (int)next_timer_ms());
         if (rv < 0 && errno == EINTR) continue;
         if (rv < 0) die("poll()");
 
@@ -159,9 +187,17 @@ void Server::run() {
             if (fd < 0 || (size_t)fd >= conns_.size() || !conns_[fd]) continue;
             Conn& c = *conns_[fd];
 
+            // Any readiness counts as activity: refresh the idle timer by
+            // moving the connection to the back of the list.
+            c.last_active_ms = get_monotonic_msec();
+            dlist_detach(&c.idle_node);
+            dlist_insert_before(&idle_list_, &c.idle_node);
+
             if (re & POLLIN)  handle_read(c);
             if (re & POLLOUT) handle_write(c);
             if (c.want_close || (re & (POLLERR | POLLHUP))) conns_[fd].reset();  // ~Conn closes fd
         }
+
+        process_timers();                          // reap idle connections
     }
 }

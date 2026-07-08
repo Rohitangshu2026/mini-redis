@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ds/dlist.h"
+
 #include <cstdint>
 #include <vector>
 #include <unistd.h>
@@ -14,8 +16,16 @@ struct Conn {
     std::vector<uint8_t> incoming;   // bytes read from socket, awaiting parse
     std::vector<uint8_t> outgoing;   // bytes awaiting write to socket
 
-    Conn() = default;
-    ~Conn() { if (fd >= 0) ::close(fd); }   // owns the fd
-    Conn(const Conn&) = delete;             // never copy (would double-close)
+    // Idle timer: the connection expires at last_active_ms + timeout.
+    // idle_node keeps connections in last-active order in the server's list.
+    uint64_t last_active_ms = 0;
+    DList    idle_node;
+
+    Conn() { dlist_init(&idle_node); }
+    ~Conn() {
+        dlist_detach(&idle_node);            // safe even if never listed
+        if (fd >= 0) ::close(fd);            // owns the fd
+    }
+    Conn(const Conn&) = delete;              // never copy (would double-close)
     Conn& operator=(const Conn&) = delete;
 };

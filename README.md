@@ -2,7 +2,7 @@
 
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)
 ![build: CMake](https://img.shields.io/badge/build-CMake-informational)
-![tests: 35 passing](https://img.shields.io/badge/tests-35%20passing-brightgreen)
+![tests: 38 passing](https://img.shields.io/badge/tests-38%20passing-brightgreen)
 
 An in-memory key–value store written from scratch in C++17. It pairs a
 single-threaded, `poll()`-driven network server with a custom binary wire
@@ -58,6 +58,7 @@ $ ./build/mini-redis-client keys
 | Sorted set | AVL tree + hash map; `O(log n)` range and rank queries |
 | Commands | Strings: `GET` `SET` `DEL` `KEYS` · Sorted sets: `ZADD` `ZREM` `ZSCORE` `ZQUERY` |
 | Pipelining | Yes — every complete request buffered from one read is served |
+| Idle connections | Reaped after an idle timeout (default 30 s), monotonic clock |
 | Tests | 25 unit tests (Catch2 + CTest) |
 | Build | CMake; server, client and tests share one static library |
 
@@ -173,9 +174,18 @@ ranges later) rely on.
 
 ### Server / event loop (`server/`)
 - **`Conn`** — one connection: its fd, intent flags (`want_read` / `want_write` /
-  `want_close`), and its own `incoming` / `outgoing` byte buffers.
+  `want_close`), its own `incoming` / `outgoing` byte buffers, plus its
+  last-activity timestamp and its hook in the idle-timer list.
 - **`Server::run`** — builds a `pollfd` set (the listener plus every connection),
-  calls `poll()`, accepts new connections, and drives readable/writable ones.
+  calls `poll()` with a timeout derived from the nearest timer, accepts new
+  connections, and drives readable/writable ones.
+- **Idle timeouts** — connections live in an intrusive doubly-linked list kept
+  in last-active order: any I/O readiness moves the connection to the back
+  (O(1)), so expired connections are always at the front. Because every
+  connection shares one timeout value, a list is all the sorting needed — the
+  nearest expiry feeds the `poll()` timeout, and each loop iteration reaps
+  from the front until it hits a live connection. Timestamps come from the
+  monotonic clock, which can't jump the way wall time can.
 - **`try_one_request`** — pulls one complete frame from `incoming`, parses and
   dispatches it, and appends the framed, serialized reply to `outgoing`.
   `handle_read` calls it in a loop, so several requests received in one read are
@@ -289,6 +299,7 @@ stateDiagram-v2
     Writing --> Writing: partial write, socket not yet ready
     Writing --> Reading: outgoing fully flushed
     Reading --> Closed: EOF, error, or oversized frame
+    Reading --> Closed: idle past the timeout
     Writing --> Closed: write error
     Closed --> [*]
 ```
@@ -411,7 +422,7 @@ mini-redis/
 ├── CMakeLists.txt              # builds a shared mini-redis-core static lib
 ├── include/
 │   ├── common/                 # log helpers, container_of, string hash
-│   ├── ds/                     # AVL tree (order statistics), sorted set
+│   ├── ds/                     # AVL tree (order statistics), sorted set, dlist
 │   ├── net/                    # Socket, read_full/write_all
 │   ├── protocol/               # wire framing/parser, response serializer
 │   ├── server/                 # Conn, Server, command dispatch
@@ -443,8 +454,9 @@ mini-redis/
 ## Roadmap
 
 Implemented today: the networking stack, wire protocol, response serialization,
-the hash-table keyspace with incremental rehashing, and an AVL-backed sorted
-set with `O(log n)` range and rank queries, behind a typed command surface.
+the hash-table keyspace with incremental rehashing, an AVL-backed sorted
+set with `O(log n)` range and rank queries behind a typed command surface,
+and idle-connection timeouts on the monotonic clock.
 
 Planned next:
 

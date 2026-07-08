@@ -21,6 +21,7 @@ add_executable(unit_tests
     unit/test_serialize.cpp
     unit/test_avl.cpp
     unit/test_zset.cpp
+    unit/test_dlist.cpp
 )
 target_link_libraries(unit_tests PRIVATE Catch2::Catch2WithMain mini-redis-core)
 
