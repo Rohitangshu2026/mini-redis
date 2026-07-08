@@ -9,7 +9,7 @@
 // Max payload we accept for a single frame body.
 constexpr size_t MAX_MSG = 32 * 1024;   // 32 KiB
 
-// Response values are serialized by protocol/serialize.h (Ch 11).
+// Response values are serialized by protocol/serialize.h.
 
 // Little-endian u32 read/write (host is LE on x86/ARM; memcpy avoids UB).
 inline uint32_t read_u32(const uint8_t* p) {

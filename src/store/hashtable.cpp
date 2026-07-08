@@ -3,7 +3,7 @@
 #include <cassert>
 #include <cstdlib>
 
-// ===== Ch 9: fixed-size table primitives (internal) =====
+// ===== fixed-size table primitives (internal) =====
 
 // n must be a power of two
 static void h_init(HTab* htab, size_t n) {
@@ -41,7 +41,7 @@ static HNode* h_detach(HTab* htab, HNode** from) {
     return node;
 }
 
-// ===== Ch 10: progressive rehashing =====
+// ===== progressive rehashing =====
 
 static const size_t k_rehashing_work  = 128;   // slots migrated per operation
 static const size_t k_max_load_factor = 8;     // size/capacity before growing
