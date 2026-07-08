@@ -31,6 +31,7 @@ add_library(mini-redis-core STATIC
     src/protocol/wire.cpp
     src/protocol/serialize.cpp
     src/store/hashtable.cpp
+    src/ds/avl.cpp
     src/server/command.cpp
     src/server/server.cpp
 )

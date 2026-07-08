@@ -2,7 +2,7 @@
 
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)
 ![build: CMake](https://img.shields.io/badge/build-CMake-informational)
-![tests: 25 passing](https://img.shields.io/badge/tests-25%20passing-brightgreen)
+![tests: 30 passing](https://img.shields.io/badge/tests-30%20passing-brightgreen)
 
 An in-memory key–value store written from scratch in C++17. It pairs a
 single-threaded, `poll()`-driven network server with a custom binary wire
