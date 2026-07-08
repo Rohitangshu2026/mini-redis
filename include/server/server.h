@@ -1,7 +1,7 @@
 #pragma once
 
 #include "net/socket.h"
-#include "store/hashtable.h"
+#include "store/database.h"
 #include "ds/dlist.h"
 
 #include <cstdint>
@@ -29,7 +29,7 @@ private:
     Socket listen_sock_;
     int    port_;
     std::vector<std::unique_ptr<Conn>> conns_;   // indexed by fd; null if unused
-    HMap   db_;                                   // keyspace: intrusive hashtable + progressive rehashing
+    Database db_;                                 // keyspace (hash index) + TTL timer heap
 
     // Connections ordered by last activity: nearest expiry at the front,
     // most recently active at the back. Timers with one fixed timeout expire

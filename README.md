@@ -2,7 +2,7 @@
 
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)
 ![build: CMake](https://img.shields.io/badge/build-CMake-informational)
-![tests: 38 passing](https://img.shields.io/badge/tests-38%20passing-brightgreen)
+![tests: 42 passing](https://img.shields.io/badge/tests-42%20passing-brightgreen)
 
 An in-memory key–value store written from scratch in C++17. It pairs a
 single-threaded, `poll()`-driven network server with a custom binary wire
@@ -59,6 +59,7 @@ $ ./build/mini-redis-client keys
 | Commands | Strings: `GET` `SET` `DEL` `KEYS` · Sorted sets: `ZADD` `ZREM` `ZSCORE` `ZQUERY` |
 | Pipelining | Yes — every complete request buffered from one read is served |
 | Idle connections | Reaped after an idle timeout (default 30 s), monotonic clock |
+| Expiration | Per-key TTL on a timer min-heap; lazy + active expiry |
 | Tests | 25 unit tests (Catch2 + CTest) |
 | Build | CMake; server, client and tests share one static library |
 
@@ -159,7 +160,17 @@ ranges later) rely on.
   therefore spread across many operations instead of one `O(n)` stop-the-world
   resize. Lookups consult **both** tables while a migration is in flight.
 - **`Entry`** — a key and its typed value (string or sorted set), carrying the
-  intrusive node. Deleting an entry tears down whatever its value owns.
+  intrusive node. Deleting an entry tears down whatever its value owns,
+  including its TTL timer.
+- **`Database` + the TTL heap** — the keyspace bundles the hash index with an
+  array-encoded **timer min-heap**: `ttl[0]` is always the nearest deadline.
+  Arbitrary deadlines need real sorting (unlike the fixed idle timeout, where
+  a list suffices), and a heap does it with no per-node allocations. Each heap
+  item back-points to its entry's `heap_idx` and every move rewrites that
+  index, so a key can update or drop its own timer in `O(log n)`. Expiration
+  is **lazy** (an overdue key is deleted on sight at lookup) plus **active**
+  (each loop tick reaps due keys, capped at 2,000 per iteration so a mass
+  expiry can't stall the loop).
 
 ### Data structures (`ds/`)
 - **AVL tree** — intrusive, self-balancing, with parent pointers. Every node
@@ -183,9 +194,10 @@ ranges later) rely on.
   in last-active order: any I/O readiness moves the connection to the back
   (O(1)), so expired connections are always at the front. Because every
   connection shares one timeout value, a list is all the sorting needed — the
-  nearest expiry feeds the `poll()` timeout, and each loop iteration reaps
-  from the front until it hits a live connection. Timestamps come from the
-  monotonic clock, which can't jump the way wall time can.
+  nearest expiry — the smaller of the idle list's front and the TTL heap's
+  root — feeds the `poll()` timeout, and each loop iteration reaps whatever
+  is due. Timestamps come from the monotonic clock, which can't jump the way
+  wall time can.
 - **`try_one_request`** — pulls one complete frame from `incoming`, parses and
   dispatches it, and appends the framed, serialized reply to `outgoing`.
   `handle_read` calls it in a loop, so several requests received in one read are
@@ -370,11 +382,18 @@ value = tag , body        # tag/body per the serialization table above
 | `ZREM` | `key name`    | integer (1 if removed, else 0) |
 | `ZSCORE` | `key name`  | double, or nil if absent |
 | `ZQUERY` | `key score name offset limit` | array of alternating name, score |
+| `EXPIRE` | `key seconds` | integer (1 if the key exists, else 0) |
+| `PEXPIRE` | `key milliseconds` | integer (1 if the key exists, else 0) |
+| `TTL` | `key` | integer seconds left (−2 no key, −1 no TTL) |
+| `PTTL` | `key` | integer milliseconds left (−2 no key, −1 no TTL) |
+| `PERSIST` | `key` | integer (1 if a TTL was removed, else 0) |
 
 `ZQUERY` is a generic range query: seek to the first pair `>= (score, name)`
 in tuple order, walk `offset` positions by rank, then emit up to `limit`
 output elements. Unknown verbs and malformed frames return a typed error;
 commands against a key holding the wrong kind of value return `WRONGTYPE`.
+`SET` discards any existing TTL on overwrite, and a non-positive expiration
+deletes the key immediately — both matching Redis.
 
 ---
 
@@ -422,11 +441,11 @@ mini-redis/
 ├── CMakeLists.txt              # builds a shared mini-redis-core static lib
 ├── include/
 │   ├── common/                 # log helpers, container_of, string hash
-│   ├── ds/                     # AVL tree (order statistics), sorted set, dlist
+│   ├── ds/                     # AVL tree (order statistics), sorted set, dlist, timer heap
 │   ├── net/                    # Socket, read_full/write_all
 │   ├── protocol/               # wire framing/parser, response serializer
 │   ├── server/                 # Conn, Server, command dispatch
-│   └── store/                  # hash table, Entry
+│   └── store/                  # hash table, typed entries, Database + TTL
 ├── src/                        # implementations mirroring include/
 ├── client/                     # command-line client
 ├── tests/unit/                 # Catch2 unit tests
@@ -456,12 +475,13 @@ mini-redis/
 Implemented today: the networking stack, wire protocol, response serialization,
 the hash-table keyspace with incremental rehashing, an AVL-backed sorted
 set with `O(log n)` range and rank queries behind a typed command surface,
-and idle-connection timeouts on the monotonic clock.
+idle-connection timeouts, and per-key TTL on a timer min-heap with lazy +
+active expiry.
 
 Planned next:
 
 - Additional value types (list, hash, set)
-- Per-key TTL with a timer, and approximate LRU eviction
+- Approximate LRU eviction under a memory cap
 - Durability: append-only log and point-in-time snapshots
 - Publish/subscribe
 - Throughput and latency benchmarks against real Redis

@@ -33,6 +33,8 @@ add_library(mini-redis-core STATIC
     src/store/hashtable.cpp
     src/ds/avl.cpp
     src/ds/zset.cpp
+    src/ds/heap.cpp
+    src/store/database.cpp
     src/server/command.cpp
     src/server/server.cpp
 )

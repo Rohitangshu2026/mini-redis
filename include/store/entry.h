@@ -3,6 +3,7 @@
 #include "store/hashtable.h"
 #include "ds/zset.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -23,12 +24,8 @@ struct Entry {
     uint32_t    type = T_STR;
     std::string str;            // value when type == T_STR
     ZSet        zset;           // value when type == T_ZSET
-};
 
-// Free an entry and everything its value owns.
-inline void entry_del(Entry* ent) {
-    if (ent->type == T_ZSET) {
-        zset_clear(&ent->zset);
-    }
-    delete ent;
-}
+    // Index of this key's timer in Database::ttl, or (size_t)-1 when the
+    // key has no TTL. The heap maintains it through its back-pointer.
+    size_t heap_idx = (size_t)-1;
+};

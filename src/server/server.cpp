@@ -56,13 +56,15 @@ bool collect_node(HNode* node, void* arg) {
     static_cast<std::vector<HNode*>*>(arg)->push_back(node);
     return true;
 }
+// Identity compare: used when we already hold the node to delete.
+bool hnode_same(HNode* a, HNode* b) { return a == b; }
 }
 
 Server::~Server() {
     std::vector<HNode*> all;
-    hm_foreach(&db_, collect_node, &all);                          // collect first...
-    for (HNode* n : all) entry_del(container_of(n, Entry, node));  // ...then free (no use-after-free)
-    hm_clear(&db_);
+    hm_foreach(&db_.map, collect_node, &all);                     // collect first...
+    for (HNode* n : all) entry_del(db_, container_of(n, Entry, node));  // ...then free
+    hm_clear(&db_.map);
 }
 
 void Server::accept_new() {
@@ -134,25 +136,46 @@ void Server::handle_write(Conn& c) {
     if (c.outgoing.empty()) { c.want_read = true; c.want_write = false; }
 }
 
-// poll() timeout derived from the nearest timer: the front of the idle list.
+// poll() timeout from the nearest of ALL timers: the front of the idle
+// list (fixed timeout => insertion order) and the top of the TTL heap.
 int32_t Server::next_timer_ms() {
-    if (dlist_empty(&idle_list_)) return -1;      // no timers, block until IO
+    uint64_t next_ms = (uint64_t)-1;
+    if (!dlist_empty(&idle_list_)) {
+        Conn* conn = container_of(idle_list_.next, Conn, idle_node);
+        next_ms = conn->last_active_ms + idle_timeout_ms_;
+    }
+    if (!db_.ttl.empty() && db_.ttl[0].val < next_ms) {
+        next_ms = db_.ttl[0].val;
+    }
+    if (next_ms == (uint64_t)-1) return -1;       // no timers, block until IO
     uint64_t now_ms = get_monotonic_msec();
-    Conn* conn = container_of(idle_list_.next, Conn, idle_node);
-    uint64_t due_ms = conn->last_active_ms + idle_timeout_ms_;
-    if (due_ms <= now_ms) return 0;               // already overdue
-    return (int32_t)(due_ms - now_ms);
+    if (next_ms <= now_ms) return 0;              // already overdue
+    return (int32_t)(next_ms - now_ms);
 }
 
-// The list is in last-active order, so expired connections are all at the
-// front; stop at the first one still alive.
 void Server::process_timers() {
     uint64_t now_ms = get_monotonic_msec();
+
+    // Idle connections: the list is in last-active order, so expired ones
+    // are all at the front; stop at the first that is still alive.
     while (!dlist_empty(&idle_list_)) {
         Conn* conn = container_of(idle_list_.next, Conn, idle_node);
         if (conn->last_active_ms + idle_timeout_ms_ > now_ms) break;
         fprintf(stderr, "idle timeout: closing fd %d\n", conn->fd);
         conns_[conn->fd].reset();                 // ~Conn detaches + closes
+    }
+
+    // Expired keys: the heap's root is always the nearest deadline. Cap the
+    // work per iteration so a mass expiry can't stall the event loop - any
+    // remainder makes next_timer_ms() return 0, so poll() won't sleep and
+    // reaping interleaves with I/O.
+    const size_t k_max_works = 2000;
+    size_t nworks = 0;
+    while (!db_.ttl.empty() && db_.ttl[0].val <= now_ms && nworks++ < k_max_works) {
+        Entry* ent = container_of(db_.ttl[0].ref, Entry, heap_idx);
+        HNode* removed = hm_delete(&db_.map, &ent->node, &hnode_same);
+        (void)removed;
+        entry_del(db_, ent);                      // also pops its heap item
     }
 }
 
