@@ -35,10 +35,14 @@ add_library(mini-redis-core STATIC
     src/ds/zset.cpp
     src/ds/heap.cpp
     src/store/database.cpp
+    src/threadpool/thread_pool.cpp
     src/server/command.cpp
     src/server/server.cpp
 )
 target_include_directories(mini-redis-core PUBLIC ${CMAKE_SOURCE_DIR}/include)
+
+find_package(Threads REQUIRED)
+target_link_libraries(mini-redis-core PUBLIC Threads::Threads)
 
 # ---- Server binary ----
 add_executable(mini-redis-server src/main.cpp)

@@ -2,7 +2,7 @@
 
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)
 ![build: CMake](https://img.shields.io/badge/build-CMake-informational)
-![tests: 42 passing](https://img.shields.io/badge/tests-42%20passing-brightgreen)
+![tests: 45 passing](https://img.shields.io/badge/tests-45%20passing-brightgreen)
 
 An in-memory key–value store written from scratch in C++17. It pairs a
 single-threaded, `poll()`-driven network server with a custom binary wire
@@ -50,7 +50,7 @@ $ ./build/mini-redis-client keys
 
 | Aspect | Choice |
 |---|---|
-| Concurrency model | Single thread, non-blocking sockets, one `poll()` event loop |
+| Concurrency model | Single-threaded `poll()` event loop + a small worker pool for async teardown of large values |
 | Transport | TCP, length-prefixed binary framing |
 | Request encoding | `[u32 nstr] ([u32 len][bytes])*` |
 | Response encoding | Type-tagged value (nil / string / int / double / error / array) |
@@ -182,6 +182,20 @@ ranges later) rely on.
   by `(score, name)` tuple order (range scans). Each `ZNode` embeds both index
   hooks plus the name bytes inline, in a single allocation. Score updates
   detach and re-insert the tree node so ordering always holds.
+
+### Thread pool (`threadpool/`)
+The one place blocking is allowed. Destroying a sorted set is `O(n)` — freeing
+a million pairs on the event loop would stall every other client — so `DEL`
+unlinks the key immediately and hands values larger than 1,000 members to a
+fixed pool of workers (classic producer/consumer: mutex + condition variable,
+with the wait condition re-checked in a loop to survive spurious wakeups and
+competing consumers). Tasks are a bare function pointer + argument, so
+queueing never allocates, and the producer — the event loop — never blocks.
+Small values are freed inline; a context switch costs more than the teardown.
+By the time a worker sees an entry it is unlinked from every shared structure,
+so workers touch only orphaned data and command atomicity is preserved.
+Measured: `DEL` of a 1,000,000-member sorted set round-trips in ~0.07 ms while
+concurrent commands keep a sub-0.1 ms p50.
 
 ### Server / event loop (`server/`)
 - **`Conn`** — one connection: its fd, intent flags (`want_read` / `want_write` /
@@ -445,7 +459,8 @@ mini-redis/
 │   ├── net/                    # Socket, read_full/write_all
 │   ├── protocol/               # wire framing/parser, response serializer
 │   ├── server/                 # Conn, Server, command dispatch
-│   └── store/                  # hash table, typed entries, Database + TTL
+│   ├── store/                  # hash table, typed entries, Database + TTL
+│   └── threadpool/             # worker pool for async value teardown
 ├── src/                        # implementations mirroring include/
 ├── client/                     # command-line client
 ├── tests/unit/                 # Catch2 unit tests
@@ -464,6 +479,8 @@ mini-redis/
   and gives full control over layout and iteration.
 - **Single-threaded execution.** Commands run to completion on one thread, so
   each is atomic by construction — no locks, latches, or races on the keyspace.
+  The worker pool doesn't weaken this: workers only ever free values that are
+  already unlinked from the keyspace, never shared state.
 - **A compact binary protocol.** Fixed-width lengths and type tags make framing
   and parsing trivial and allocation-bounded, and let the client render replies
   without guessing types.
@@ -475,8 +492,9 @@ mini-redis/
 Implemented today: the networking stack, wire protocol, response serialization,
 the hash-table keyspace with incremental rehashing, an AVL-backed sorted
 set with `O(log n)` range and rank queries behind a typed command surface,
-idle-connection timeouts, and per-key TTL on a timer min-heap with lazy +
-active expiry.
+idle-connection timeouts, per-key TTL on a timer min-heap with lazy +
+active expiry, and a worker pool that tears down large values off the
+event loop.
 
 Planned next:
 

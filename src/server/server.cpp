@@ -31,6 +31,7 @@ static void buf_consume(std::vector<uint8_t>& buf, size_t n) {
 Server::Server(int port, uint64_t idle_timeout_ms)
     : port_(port), idle_timeout_ms_(idle_timeout_ms) {
     dlist_init(&idle_list_);
+    db_.pool = &pool_;                  // large-value teardown goes async
 
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) die("socket()");
