@@ -2,7 +2,7 @@
 
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)
 ![build: CMake](https://img.shields.io/badge/build-CMake-informational)
-![tests: 45 passing](https://img.shields.io/badge/tests-45%20passing-brightgreen)
+[![CI](https://github.com/Rohitangshu2026/mini-redis/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Rohitangshu2026/mini-redis/actions/workflows/ci.yml)
 
 An in-memory key–value store written from scratch in C++17. It pairs a
 single-threaded, `poll()`-driven network server with a custom binary wire
@@ -60,7 +60,8 @@ $ ./build/mini-redis-client keys
 | Pipelining | Yes — every complete request buffered from one read is served |
 | Idle connections | Reaped after an idle timeout (default 30 s), monotonic clock |
 | Expiration | Per-key TTL on a timer min-heap; lazy + active expiry |
-| Tests | 25 unit tests (Catch2 + CTest) |
+| Tests | Catch2 suite in CTest; data structures property-tested against reference oracles |
+| CI | Linux + macOS, gcc + clang, Debug + Release, ASan/UBSan + TSan |
 | Build | CMake; server, client and tests share one static library |
 
 A deeper, forward-looking design document lives in
@@ -439,12 +440,14 @@ Run the test suite:
 ctest --test-dir build --output-on-failure
 ```
 
-The 35 tests cover socket fd ownership and move semantics, the wire codec and
+The suite covers socket fd ownership and move semantics, the wire codec and
 framing, `parse_req` on malformed and truncated input, the byte layout of the
-response serializer, and property tests that drive the hash table (a
-one-million-key rehash-survival run), the AVL tree (100k random ops with a
-full structural audit every 1k), and the sorted set (10k random ops against a
-two-index oracle).
+response serializer, the intrusive list, the timer heap's ordering and
+back-pointer invariants, the thread pool, and property tests that drive the
+hash table (a one-million-key rehash-survival run), the AVL tree (100k random
+ops with a full structural audit every 1k), and the sorted set (10k random
+ops against a two-index oracle). CI runs it all on Linux and macOS with gcc
+and clang, plus AddressSanitizer/UBSan and ThreadSanitizer jobs.
 
 ---
 
