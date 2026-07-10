@@ -14,7 +14,7 @@
 // Tasks are a plain function pointer + argument, so queueing a task never
 // allocates. The intended producer is the event loop, which must never
 // block: queue() only takes the mutex long enough to push one item.
-class ThreadPool {
+class ThreadPool{
 public:
     explicit ThreadPool(size_t num_threads);
     ~ThreadPool();                       // drains queued work, then joins
@@ -26,7 +26,7 @@ public:
     void queue(void (*f)(void*), void* arg);
 
 private:
-    struct Work {
+    struct Work{
         void (*f)(void*) = nullptr;
         void* arg        = nullptr;
     };

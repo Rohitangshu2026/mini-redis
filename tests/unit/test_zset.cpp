@@ -12,25 +12,25 @@
 #include <utility>
 #include <vector>
 
-namespace {
+namespace{
 
 const double NEG_INF = -std::numeric_limits<double>::infinity();
 
-bool zadd(ZSet& z, const std::string& name, double score) {
+bool zadd(ZSet& z, const std::string& name, double score){
     return zset_insert(&z, name.data(), name.size(), score);
 }
-ZNode* zfind(ZSet& z, const std::string& name) {
+ZNode* zfind(ZSet& z, const std::string& name){
     return zset_lookup(&z, name.data(), name.size());
 }
-std::string zname(const ZNode* n) {
+std::string zname(const ZNode* n){
     return std::string(n->name, n->len);
 }
 
 // Walk the whole set in sort order via seek + rank steps.
-std::vector<std::pair<double, std::string>> walk(ZSet& z) {
+std::vector<std::pair<double, std::string>> walk(ZSet& z){
     std::vector<std::pair<double, std::string>> out;
     ZNode* node = zset_seekge(&z, NEG_INF, "", 0);
-    while (node) {
+    while(node){
         out.emplace_back(node->score, zname(node));
         node = znode_offset(node, +1);
     }
@@ -38,15 +38,15 @@ std::vector<std::pair<double, std::string>> walk(ZSet& z) {
 }
 
 // Exact content match against a (score, name)-ordered oracle.
-bool matches(ZSet& z, const std::set<std::pair<double, std::string>>& oracle) {
+bool matches(ZSet& z, const std::set<std::pair<double, std::string>>& oracle){
     auto got = walk(z);
-    if (got.size() != oracle.size()) return false;
+    if(got.size() != oracle.size()) return false;
     return std::equal(got.begin(), got.end(), oracle.begin());
 }
 
 } // namespace
 
-TEST_CASE("zset: insert, update, and point lookup by name", "[zset]") {
+TEST_CASE("zset: insert, update, and point lookup by name", "[zset]"){
     ZSet z;
     REQUIRE(zadd(z, "alice", 100));         // new pair
     REQUIRE(zadd(z, "bob", 200));
@@ -65,7 +65,7 @@ TEST_CASE("zset: insert, update, and point lookup by name", "[zset]") {
     zset_clear(&z);
 }
 
-TEST_CASE("zset: delete removes a pair from both indexes", "[zset]") {
+TEST_CASE("zset: delete removes a pair from both indexes", "[zset]"){
     ZSet z;
     zadd(z, "a", 1);
     zadd(z, "b", 2);
@@ -80,9 +80,9 @@ TEST_CASE("zset: delete removes a pair from both indexes", "[zset]") {
     zset_clear(&z);
 }
 
-TEST_CASE("zset: equal scores order by name; seekge lands on tuple bounds", "[zset]") {
+TEST_CASE("zset: equal scores order by name; seekge lands on tuple bounds", "[zset]"){
     ZSet z;
-    for (const char* n : {"delta", "alpha", "charlie", "bravo"}) zadd(z, n, 7);
+    for(const char* n : {"delta", "alpha", "charlie", "bravo"}) zadd(z, n, 7);
 
     auto got = walk(z);                     // same score: lexicographic by name
     REQUIRE(got[0].second == "alpha");
@@ -101,18 +101,18 @@ TEST_CASE("zset: equal scores order by name; seekge lands on tuple bounds", "[zs
     zset_clear(&z);
 }
 
-TEST_CASE("zset: rank offsets jump both directions in O(log n)", "[zset]") {
+TEST_CASE("zset: rank offsets jump both directions in O(log n)", "[zset]"){
     const int N = 100;
     ZSet z;
     char buf[16];
-    for (int i = 0; i < N; i++) {
+    for(int i = 0; i < N; i++){
         std::snprintf(buf, sizeof(buf), "m%03d", i);
         zadd(z, buf, i);
     }
 
     ZNode* first = zset_seekge(&z, NEG_INF, "", 0);
     REQUIRE(first->score == 0);
-    for (int i = 0; i < N; i += 7) {
+    for(int i = 0; i < N; i += 7){
         ZNode* n = znode_offset(first, i);
         REQUIRE(n != nullptr);
         REQUIRE(n->score == i);
@@ -124,7 +124,7 @@ TEST_CASE("zset: rank offsets jump both directions in O(log n)", "[zset]") {
     zset_clear(&z);
 }
 
-TEST_CASE("zset: 10k random ops match a two-index oracle", "[zset][property]") {
+TEST_CASE("zset: 10k random ops match a two-index oracle", "[zset][property]"){
     ZSet z;
     std::map<std::string, double> by_name;              // oracle index 1
     std::set<std::pair<double, std::string>> by_score;  // oracle index 2
@@ -132,36 +132,36 @@ TEST_CASE("zset: 10k random ops match a two-index oracle", "[zset][property]") {
 
     char buf[16];
     bool ok = true;
-    for (int i = 0; i < 10000 && ok; i++) {
+    for(int i = 0; i < 10000 && ok; i++){
         std::snprintf(buf, sizeof(buf), "n%03d", (int)(rng() % 300));
         std::string name = buf;
         double score = (double)(int)(rng() % 400) / 4.0;    // exact in binary
 
         uint32_t action = rng() % 10;
-        if (action < 6) {                       // insert or update
+        if(action < 6){                       // insert or update
             bool added = zadd(z, name, score);
             auto it = by_name.find(name);
-            if (added != (it == by_name.end())) { ok = false; break; }
-            if (it != by_name.end()) by_score.erase({it->second, name});
+            if(added != (it == by_name.end())){ ok = false; break; }
+            if(it != by_name.end()) by_score.erase({it->second, name});
             by_name[name] = score;
             by_score.insert({score, name});
-        } else if (action < 9) {                // delete by name
+        } else if(action < 9){                // delete by name
             ZNode* node = zfind(z, name);
             auto it = by_name.find(name);
-            if ((node != nullptr) != (it != by_name.end())) { ok = false; break; }
-            if (node) {
+            if((node != nullptr) != (it != by_name.end())){ ok = false; break; }
+            if(node){
                 zset_delete(&z, node);
                 by_score.erase({it->second, name});
                 by_name.erase(it);
             }
-        } else {                                // point lookup
+        }else{                                // point lookup
             ZNode* node = zfind(z, name);
             auto it = by_name.find(name);
-            if ((node != nullptr) != (it != by_name.end())) { ok = false; break; }
-            if (node && node->score != it->second) { ok = false; break; }
+            if((node != nullptr) != (it != by_name.end())){ ok = false; break; }
+            if(node && node->score != it->second){ ok = false; break; }
         }
 
-        if (i % 500 == 499) ok = matches(z, by_score);  // full audit
+        if(i % 500 == 499) ok = matches(z, by_score);  // full audit
     }
     REQUIRE(ok);
     REQUIRE(matches(z, by_score));

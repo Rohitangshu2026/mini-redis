@@ -12,7 +12,7 @@
 //   int : [u8 SER_INT][i64]
 //   dbl : [u8 SER_DBL][f64]
 //   arr : [u8 SER_ARR][u32 n][ n serialized values ]
-enum {
+enum{
     SER_NIL = 0,
     SER_ERR = 1,
     SER_STR = 2,
@@ -22,7 +22,7 @@ enum {
 };
 
 // Error codes carried inside SER_ERR.
-enum {
+enum{
     ERR_UNKNOWN = 1,
     ERR_ARG     = 2,
     ERR_TYPE    = 3,

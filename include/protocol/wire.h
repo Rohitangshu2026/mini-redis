@@ -12,12 +12,12 @@ constexpr size_t MAX_MSG = 32 * 1024;   // 32 KiB
 // Response values are serialized by protocol/serialize.h.
 
 // Little-endian u32 read/write (host is LE on x86/ARM; memcpy avoids UB).
-inline uint32_t read_u32(const uint8_t* p) {
+inline uint32_t read_u32(const uint8_t* p){
     uint32_t v;
     std::memcpy(&v, p, 4);
     return v;
 }
-inline void write_u32(uint8_t* p, uint32_t v) {
+inline void write_u32(uint8_t* p, uint32_t v){
     std::memcpy(p, &v, 4);
 }
 

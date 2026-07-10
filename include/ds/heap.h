@@ -15,7 +15,7 @@
 // Each item back-points to its owner's stored index (e.g. Entry::heap_idx).
 // Every move re-writes *ref, so the owner always knows where its timer
 // lives and can update or remove it directly.
-struct HeapItem {
+struct HeapItem{
     uint64_t val = 0;          // sort key: expiration time, monotonic ms
     size_t*  ref = nullptr;    // -> the owner's index field
 };

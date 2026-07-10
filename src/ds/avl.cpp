@@ -1,9 +1,9 @@
 #include "ds/avl.h"
 
-static uint32_t max_u32(uint32_t a, uint32_t b) { return a < b ? b : a; }
+static uint32_t max_u32(uint32_t a, uint32_t b){ return a < b ? b : a; }
 
 // Recompute a node's aggregates from its children.
-static void avl_update(AVLNode* node) {
+static void avl_update(AVLNode* node){
     node->height = 1 + max_u32(avl_height(node->left), avl_height(node->right));
     node->cnt    = 1 + avl_cnt(node->left) + avl_cnt(node->right);
 }
@@ -13,13 +13,13 @@ static void avl_update(AVLNode* node) {
 //     l   new_node   =>    node      r
 //         /      \        /    \
 //      inner      r      l    inner
-static AVLNode* rot_left(AVLNode* node) {
+static AVLNode* rot_left(AVLNode* node){
     AVLNode* parent   = node->parent;
     AVLNode* new_node = node->right;
     AVLNode* inner    = new_node->left;
 
     node->right = inner;
-    if (inner) inner->parent = node;
+    if(inner) inner->parent = node;
 
     new_node->parent = parent;   // caller re-links parent's child pointer
     new_node->left   = node;
@@ -31,13 +31,13 @@ static AVLNode* rot_left(AVLNode* node) {
 }
 
 // Mirror of rot_left.
-static AVLNode* rot_right(AVLNode* node) {
+static AVLNode* rot_right(AVLNode* node){
     AVLNode* parent   = node->parent;
     AVLNode* new_node = node->left;
     AVLNode* inner    = new_node->right;
 
     node->left = inner;
-    if (inner) inner->parent = node;
+    if(inner) inner->parent = node;
 
     new_node->parent = parent;
     new_node->right  = node;
@@ -50,98 +50,98 @@ static AVLNode* rot_right(AVLNode* node) {
 
 // Left subtree is two levels taller: rotate right, converting the
 // left-right shape into left-left first if needed.
-static AVLNode* avl_fix_left(AVLNode* node) {
-    if (avl_height(node->left->left) < avl_height(node->left->right)) {
+static AVLNode* avl_fix_left(AVLNode* node){
+    if(avl_height(node->left->left) < avl_height(node->left->right)){
         node->left = rot_left(node->left);
     }
     return rot_right(node);
 }
 
 // Mirror: right subtree is two levels taller.
-static AVLNode* avl_fix_right(AVLNode* node) {
-    if (avl_height(node->right->right) < avl_height(node->right->left)) {
+static AVLNode* avl_fix_right(AVLNode* node){
+    if(avl_height(node->right->right) < avl_height(node->right->left)){
         node->right = rot_right(node->right);
     }
     return rot_left(node);
 }
 
-AVLNode* avl_fix(AVLNode* node) {
-    while (true) {
+AVLNode* avl_fix(AVLNode* node){
+    while(true){
         AVLNode** from  = &node;            // where the fixed subtree re-attaches
         AVLNode* parent = node->parent;
-        if (parent) {
+        if(parent){
             from = (parent->left == node) ? &parent->left : &parent->right;
         }
 
         avl_update(node);
         uint32_t l = avl_height(node->left);
         uint32_t r = avl_height(node->right);
-        if (l == r + 2) {
+        if(l == r + 2){
             *from = avl_fix_left(node);
-        } else if (l + 2 == r) {
+        } else if(l + 2 == r){
             *from = avl_fix_right(node);
         }
 
-        if (!parent) return *from;          // reached (possibly rotated) root
+        if(!parent) return *from;          // reached (possibly rotated) root
         node = parent;
     }
 }
 
 // Detach a node that has at most one child: splice the child into its place.
-static AVLNode* avl_del_easy(AVLNode* node) {
+static AVLNode* avl_del_easy(AVLNode* node){
     AVLNode* child  = node->left ? node->left : node->right;
     AVLNode* parent = node->parent;
 
-    if (child) child->parent = parent;
-    if (!parent) return child;              // removed the root
+    if(child) child->parent = parent;
+    if(!parent) return child;              // removed the root
 
     AVLNode** from = (parent->left == node) ? &parent->left : &parent->right;
     *from = child;
     return avl_fix(parent);
 }
 
-AVLNode* avl_del(AVLNode* node) {
-    if (!node->left || !node->right) {
+AVLNode* avl_del(AVLNode* node){
+    if(!node->left || !node->right){
         return avl_del_easy(node);
     }
 
     // Two children: detach the in-order successor, then transplant it
     // into this node's position so the caller can free `node`.
     AVLNode* victim = node->right;
-    while (victim->left) victim = victim->left;
+    while(victim->left) victim = victim->left;
     AVLNode* root = avl_del_easy(victim);
 
     *victim = *node;                        // adopt links + aggregates
-    if (victim->left)  victim->left->parent  = victim;
-    if (victim->right) victim->right->parent = victim;
+    if(victim->left)  victim->left->parent  = victim;
+    if(victim->right) victim->right->parent = victim;
 
     AVLNode** from  = &root;
     AVLNode* parent = node->parent;
-    if (parent) {
+    if(parent){
         from = (parent->left == node) ? &parent->left : &parent->right;
     }
     *from = victim;
     return root;
 }
 
-AVLNode* avl_offset(AVLNode* node, int64_t offset) {
+AVLNode* avl_offset(AVLNode* node, int64_t offset){
     int64_t pos = 0;                        // rank of `node` relative to start
-    while (offset != pos) {
-        if (pos < offset && pos + (int64_t)avl_cnt(node->right) >= offset) {
+    while(offset != pos){
+        if(pos < offset && pos + (int64_t)avl_cnt(node->right) >= offset){
             // target is inside the right subtree
             node = node->right;
             pos += avl_cnt(node->left) + 1;
-        } else if (pos > offset && pos - (int64_t)avl_cnt(node->left) <= offset) {
+        } else if(pos > offset && pos - (int64_t)avl_cnt(node->left) <= offset){
             // target is inside the left subtree
             node = node->left;
             pos -= avl_cnt(node->right) + 1;
-        } else {
+        }else{
             // target is outside this subtree: climb to the parent
             AVLNode* parent = node->parent;
-            if (!parent) return nullptr;    // rank out of range
-            if (parent->right == node) {
+            if(!parent) return nullptr;    // rank out of range
+            if(parent->right == node){
                 pos -= avl_cnt(node->left) + 1;
-            } else {
+            }else{
                 pos += avl_cnt(node->right) + 1;
             }
             node = parent;

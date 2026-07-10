@@ -11,7 +11,7 @@
 
 struct Conn;   // full definition in server/conn.h
 
-class Server {
+class Server{
 public:
     static constexpr uint64_t k_default_idle_timeout_ms = 30'000;
     static constexpr size_t   k_num_workers = 4;

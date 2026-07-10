@@ -10,7 +10,7 @@
 // height: subtree height, used for rebalancing decisions.
 // cnt:    subtree node count, which is what makes O(log n) rank queries
 //         (avl_offset) possible.
-struct AVLNode {
+struct AVLNode{
     AVLNode* parent = nullptr;
     AVLNode* left   = nullptr;
     AVLNode* right  = nullptr;
@@ -18,14 +18,14 @@ struct AVLNode {
     uint32_t cnt    = 1;
 };
 
-inline void avl_init(AVLNode* node) {
+inline void avl_init(AVLNode* node){
     node->parent = node->left = node->right = nullptr;
     node->height = 1;
     node->cnt    = 1;
 }
 
 // Subtree accessors that tolerate null (empty subtree).
-inline uint32_t avl_height(const AVLNode* node) { return node ? node->height : 0; }
+inline uint32_t avl_height(const AVLNode* node){ return node ? node->height : 0; }
 inline uint32_t avl_cnt(const AVLNode* node)    { return node ? node->cnt : 0; }
 
 // Rebalance from a freshly linked/unlinked node up to the root.

@@ -13,7 +13,7 @@ class ThreadPool;   // full definition in threadpool/thread_pool.h
 // heap. ttl[0] is always the nearest expiration; every entry with a TTL
 // carries its heap position in Entry::heap_idx, which the heap keeps in
 // sync through its back-pointers.
-struct Database {
+struct Database{
     HMap                  map;
     std::vector<HeapItem> ttl;
     ThreadPool*           pool = nullptr;   // for async teardown of large values

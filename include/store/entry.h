@@ -8,17 +8,17 @@
 #include <string>
 
 // Value types a key can hold.
-enum : uint32_t {
+enum : uint32_t{
     T_STR  = 1,
     T_ZSET = 2,
 };
 
-// A key and its value in the keyspace. HNode must stay the first member
-// (container_of relies on it). The two value members could share a union,
-// but std::string's constructor/destructor would then need manual placement
-// calls everywhere; an empty std::string and an empty ZSet cost little, so
-// the plain tagged form is the simpler, safer trade.
-struct Entry {
+// A key and its value in the keyspace, discriminated by `type`. The two
+// value members could share a union, but std::string's constructor and
+// destructor would then need manual placement calls everywhere; an empty
+// std::string and an empty ZSet cost little, so the plain tagged form is
+// the simpler, safer trade.
+struct Entry{
     HNode       node;           // intrusive hashtable hook (FIRST member)
     std::string key;
     uint32_t    type = T_STR;

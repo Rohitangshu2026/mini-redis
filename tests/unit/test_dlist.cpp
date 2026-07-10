@@ -4,14 +4,14 @@
 
 #include <vector>
 
-namespace {
+namespace{
 
 // Collect the list contents (as indexes into `nodes`) by walking forward.
-std::vector<int> order(const DList& head, const DList* nodes, int n) {
+std::vector<int> order(const DList& head, const DList* nodes, int n){
     std::vector<int> out;
-    for (const DList* p = head.next; p != &head; p = p->next) {
-        for (int i = 0; i < n; i++) {
-            if (p == &nodes[i]) out.push_back(i);
+    for(const DList* p = head.next; p != &head; p = p->next){
+        for(int i = 0; i < n; i++){
+            if(p == &nodes[i]) out.push_back(i);
         }
     }
     return out;
@@ -19,7 +19,7 @@ std::vector<int> order(const DList& head, const DList* nodes, int n) {
 
 } // namespace
 
-TEST_CASE("dlist: a fresh head is empty and self-linked", "[dlist]") {
+TEST_CASE("dlist: a fresh head is empty and self-linked", "[dlist]"){
     DList head;
     dlist_init(&head);
     REQUIRE(dlist_empty(&head));
@@ -27,11 +27,11 @@ TEST_CASE("dlist: a fresh head is empty and self-linked", "[dlist]") {
     REQUIRE(head.prev == &head);
 }
 
-TEST_CASE("dlist: insert_before the head appends in FIFO order", "[dlist]") {
+TEST_CASE("dlist: insert_before the head appends in FIFO order", "[dlist]"){
     DList head;
     dlist_init(&head);
     DList n[3];
-    for (auto& x : n) dlist_insert_before(&head, &x);
+    for(auto& x : n) dlist_insert_before(&head, &x);
 
     REQUIRE_FALSE(dlist_empty(&head));
     REQUIRE(order(head, n, 3) == std::vector<int>{0, 1, 2});
@@ -41,11 +41,11 @@ TEST_CASE("dlist: insert_before the head appends in FIFO order", "[dlist]") {
     REQUIRE(n[0].prev == &head);
 }
 
-TEST_CASE("dlist: detach relinks neighbors and the node is reusable", "[dlist]") {
+TEST_CASE("dlist: detach relinks neighbors and the node is reusable", "[dlist]"){
     DList head;
     dlist_init(&head);
     DList n[3];
-    for (auto& x : n) dlist_insert_before(&head, &x);
+    for(auto& x : n) dlist_insert_before(&head, &x);
 
     dlist_detach(&n[1]);                       // pull from the middle
     REQUIRE(order(head, n, 3) == std::vector<int>{0, 2});

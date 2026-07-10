@@ -10,7 +10,7 @@
 // One copy of the data, indexed two ways:
 //   - by (score, name) through the AVL tree  -> range and rank queries
 //   - by name through the hash map           -> O(1) point queries
-struct ZSet {
+struct ZSet{
     AVLNode* root = nullptr;
     HMap     hmap;
 };
@@ -18,7 +18,7 @@ struct ZSet {
 // One pair. Both index nodes are embedded, so a single allocation carries
 // the data plus its position in both indexes. The name is stored inline at
 // the end of the struct (flexible-array idiom; the real length is `len`).
-struct ZNode {
+struct ZNode{
     AVLNode tree;      // (score, name) index hook
     HNode   hmap;      // name index hook
     double  score = 0;

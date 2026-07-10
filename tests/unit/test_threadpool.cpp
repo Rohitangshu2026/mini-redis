@@ -8,39 +8,39 @@
 #include <set>
 #include <thread>
 
-namespace {
+namespace{
 
 std::atomic<int> g_counter{0};
-void incr(void*) { g_counter.fetch_add(1); }
+void incr(void*){ g_counter.fetch_add(1); }
 
 std::atomic<bool> g_release{false};
-void block_until_released(void*) {
-    while (!g_release.load()) {
+void block_until_released(void*){
+    while(!g_release.load()){
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
 
 std::mutex g_ids_mu;
 std::set<std::thread::id> g_ids;
-void record_thread_id(void*) {
+void record_thread_id(void*){
     std::lock_guard<std::mutex> lock(g_ids_mu);
     g_ids.insert(std::this_thread::get_id());
 }
 
 } // namespace
 
-TEST_CASE("thread pool: every queued task runs exactly once", "[threadpool]") {
+TEST_CASE("thread pool: every queued task runs exactly once", "[threadpool]"){
     g_counter = 0;
     {
         ThreadPool pool(4);
-        for (int i = 0; i < 1000; i++) {
+        for(int i = 0; i < 1000; i++){
             pool.queue(&incr, nullptr);
         }
     }   // destructor drains the queue, then joins
     REQUIRE(g_counter.load() == 1000);
 }
 
-TEST_CASE("thread pool: queue() never blocks the producer", "[threadpool]") {
+TEST_CASE("thread pool: queue() never blocks the producer", "[threadpool]"){
     g_counter = 0;
     g_release = false;
     {
@@ -57,14 +57,14 @@ TEST_CASE("thread pool: queue() never blocks the producer", "[threadpool]") {
     REQUIRE(g_counter.load() == 1);               // queued task still ran
 }
 
-TEST_CASE("thread pool: work runs off the calling thread", "[threadpool]") {
+TEST_CASE("thread pool: work runs off the calling thread", "[threadpool]"){
     {
         std::lock_guard<std::mutex> lock(g_ids_mu);
         g_ids.clear();
     }
     {
         ThreadPool pool(4);
-        for (int i = 0; i < 100; i++) {
+        for(int i = 0; i < 100; i++){
             pool.queue(&record_thread_id, nullptr);
         }
     }

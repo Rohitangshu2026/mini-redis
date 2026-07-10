@@ -3,51 +3,69 @@
 #include <cassert>
 #include <cstring>
 
-static void put_u8(std::vector<uint8_t>& out, uint8_t v) { out.push_back(v); }
-static void put_u32(std::vector<uint8_t>& out, uint32_t v) {
+// Little-endian byte appenders. Values go through memcpy rather than a
+// pointer cast because the output buffer has no alignment guarantee, and
+// unaligned stores through a cast pointer are undefined behavior. Every
+// compiler turns this memcpy into a plain store anyway.
+static void put_u8(std::vector<uint8_t>& out, uint8_t v){ out.push_back(v); }
+static void put_u32(std::vector<uint8_t>& out, uint32_t v){
     uint8_t b[4]; std::memcpy(b, &v, 4); out.insert(out.end(), b, b + 4);
 }
-static void put_i64(std::vector<uint8_t>& out, int64_t v) {
+static void put_i64(std::vector<uint8_t>& out, int64_t v){
     uint8_t b[8]; std::memcpy(b, &v, 8); out.insert(out.end(), b, b + 8);
 }
-static void put_f64(std::vector<uint8_t>& out, double v) {
+static void put_f64(std::vector<uint8_t>& out, double v){
     uint8_t b[8]; std::memcpy(b, &v, 8); out.insert(out.end(), b, b + 8);
 }
 
-void out_nil(std::vector<uint8_t>& out) {
+// A nil is nothing but its tag byte.
+void out_nil(std::vector<uint8_t>& out){
     put_u8(out, SER_NIL);
 }
-void out_str(std::vector<uint8_t>& out, const std::string& s) {
+
+// Strings carry an explicit length, so they can hold any bytes including
+// NULs — the protocol never relies on terminators.
+void out_str(std::vector<uint8_t>& out, const std::string& s){
     put_u8(out, SER_STR);
     put_u32(out, (uint32_t)s.size());
     out.insert(out.end(), s.begin(), s.end());
 }
-void out_int(std::vector<uint8_t>& out, int64_t x) {
+
+void out_int(std::vector<uint8_t>& out, int64_t x){
     put_u8(out, SER_INT);
     put_i64(out, x);
 }
-void out_dbl(std::vector<uint8_t>& out, double x) {
+
+void out_dbl(std::vector<uint8_t>& out, double x){
     put_u8(out, SER_DBL);
     put_f64(out, x);
 }
-void out_err(std::vector<uint8_t>& out, int32_t code, const std::string& msg) {
+
+// Errors carry a machine-readable code plus a human-readable message, so
+// clients can branch on the code without parsing text.
+void out_err(std::vector<uint8_t>& out, int32_t code, const std::string& msg){
     put_u8(out, SER_ERR);
     put_u32(out, (uint32_t)code);
     put_u32(out, (uint32_t)msg.size());
     out.insert(out.end(), msg.begin(), msg.end());
 }
-void out_arr(std::vector<uint8_t>& out, uint32_t n) {
+
+// Array with a count known up front; the n values follow directly.
+void out_arr(std::vector<uint8_t>& out, uint32_t n){
     put_u8(out, SER_ARR);
     put_u32(out, n);
 }
 
-size_t out_begin_arr(std::vector<uint8_t>& out) {
+// For arrays whose length is only known after iterating (range queries):
+// write the header with a placeholder count, emit the elements, then patch
+// the count in place. `ctx` is the byte offset of the placeholder.
+size_t out_begin_arr(std::vector<uint8_t>& out){
     put_u8(out, SER_ARR);
     put_u32(out, 0);            // placeholder, patched by out_end_arr
     return out.size() - 4;
 }
 
-void out_end_arr(std::vector<uint8_t>& out, size_t ctx, uint32_t n) {
+void out_end_arr(std::vector<uint8_t>& out, size_t ctx, uint32_t n){
     assert(out[ctx - 1] == SER_ARR);
     std::memcpy(&out[ctx], &n, 4);
 }
