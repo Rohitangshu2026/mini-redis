@@ -487,22 +487,3 @@ mini-redis/
 - **A compact binary protocol.** Fixed-width lengths and type tags make framing
   and parsing trivial and allocation-bounded, and let the client render replies
   without guessing types.
-
----
-
-## Roadmap
-
-Implemented today: the networking stack, wire protocol, response serialization,
-the hash-table keyspace with incremental rehashing, an AVL-backed sorted
-set with `O(log n)` range and rank queries behind a typed command surface,
-idle-connection timeouts, per-key TTL on a timer min-heap with lazy +
-active expiry, and a worker pool that tears down large values off the
-event loop.
-
-Planned next:
-
-- Additional value types (list, hash, set)
-- Approximate LRU eviction under a memory cap
-- Durability: append-only log and point-in-time snapshots
-- Publish/subscribe
-- Throughput and latency benchmarks against real Redis
