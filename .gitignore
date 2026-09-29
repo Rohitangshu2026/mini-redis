@@ -24,3 +24,6 @@
 /compile_commands.json
 
 /docs
+
+# Personal notes, not part of the project
+/INTERVIEW_PREP.md
