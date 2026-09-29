@@ -82,7 +82,6 @@ $ ./build/mini-redis-client get board
 - [Build, run, test](#build-run-test)
 - [Project layout](#project-layout)
 - [Design decisions and trade-offs](#design-decisions-and-trade-offs)
-- [Roadmap](#roadmap)
 
 ---
 
@@ -641,8 +640,8 @@ Real Redis speaks RESP, a text protocol. The same request in RESP is
 
 Both solve the same problem, marking where one piece ends and the next begins
 in a byte stream. The binary form makes that check a single comparison, at the
-cost of not being human-readable. A RESP front end is on the roadmap so that
-`redis-cli` could talk to the server.
+cost of not being human-readable, and it means `redis-cli` can't talk to the
+server.
 
 ### Parser safety
 
@@ -1642,24 +1641,3 @@ Where each part of the flow lives:
   is no separate `maxclients` setting.
 - **Workers only ever see orphaned data.** Values are unlinked before they are
   queued, so adding threads didn't weaken the single-thread atomicity model.
-
----
-
-## Roadmap
-
-Built so far: the socket layer and non-blocking event loop with pipelining and
-back-pressure, the binary wire protocol and typed reply serialization, the
-hash-table keyspace with incremental rehashing, sorted sets on an
-order-statistic AVL tree plus hash index, idle-connection timeouts, per-key TTL
-with lazy and active expiry, and a thread pool for freeing large values, all
-under a sanitizer-checked CI matrix.
-
-Planned next:
-
-- More value types: lists, hashes, sets
-- A RESP front end so `redis-cli` and standard client libraries can connect
-- Approximate LRU eviction under a memory limit
-- Durability: an append-only log and point-in-time snapshots
-- Publish/subscribe
-- An `epoll`/`kqueue` backend behind the same loop
-- Throughput and latency benchmarks against real Redis
